@@ -62,18 +62,6 @@ class EndpointsConfig(BaseModel):
     base_path: str = "/tmp/sglang_omni"
 
 
-class ParallelismConfig(BaseModel):
-    """Supported parallelism for one logical stage."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tp: int = 1
-
-    def model_post_init(self, __context: Any = None) -> None:
-        if self.tp < 1:
-            raise ValueError("parallelism.tp must be >= 1")
-
-
 class StageResourceConfig(BaseModel):
     """Placement-resource intent for one logical stage rank."""
 
@@ -238,7 +226,6 @@ class StageConfig(BaseModel):
     # --- GPU / parallelism ---
     gpu: int | list[int] | None = None
     tp_size: int = 1
-    parallelism: ParallelismConfig = Field(default_factory=ParallelismConfig)
     process: str | None = None
 
     # --- Runtime intent ---
@@ -268,26 +255,12 @@ class StageConfig(BaseModel):
     comm: CommConfig | None = None
 
     def model_post_init(self, __context: Any = None) -> None:
-        fields_set = self.__pydantic_fields_set__
-        tp_size_set = "tp_size" in fields_set
-        parallelism_set = "parallelism" in fields_set
         if self.tp_size < 1:
             raise ValueError(f"Stage {self.name!r} must have tp_size >= 1")
         if self.process is not None:
             self.process = self.process.strip()
             if not self.process:
                 raise ValueError(f"Stage {self.name!r} process must not be empty")
-        if parallelism_set and tp_size_set and self.parallelism.tp != self.tp_size:
-            raise ValueError(
-                f"Stage {self.name!r}: tp_size={self.tp_size} conflicts with "
-                f"parallelism.tp={self.parallelism.tp}"
-            )
-        if not parallelism_set and self.tp_size != self.parallelism.tp:
-            self.parallelism.tp = self.tp_size
-        elif (
-            parallelism_set and not tp_size_set and self.tp_size != self.parallelism.tp
-        ):
-            self.tp_size = self.parallelism.tp
 
         gpu = self.gpu
         if gpu is None:

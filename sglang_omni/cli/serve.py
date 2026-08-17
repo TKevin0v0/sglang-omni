@@ -16,6 +16,7 @@ from sglang_omni.config.patch import (
     Specificity,
 )
 from sglang_omni.config.path import ConfigPathError
+from sglang_omni.config.sources import patches_from_model_path_flag
 from sglang_omni.preprocessing.resource_connector import (
     resolve_allowed_local_media_path,
 )
@@ -1473,25 +1474,31 @@ def serve(
     # Typed mem-fraction flags become patches so they resolve together with
     # the dotted overrides and --set at declared precedence, instead of being
     # written over the merged config afterwards.
-    mem_fraction_patches = patches_from_mem_fraction_flags(
+    flag_patches = patches_from_mem_fraction_flags(
         config_manager.config,
         mem_fraction_static=mem_fraction_static,
         thinker_mem_fraction_static=thinker_mem_fraction_static,
         talker_mem_fraction_static=talker_mem_fraction_static,
     )
+    if config and model_path is not None:
+        # Given both, the flag is a command line source and outranks the
+        # file's model_path. Merged as a patch rather than assigned onto the
+        # result, so `sgl-omni config resolve/explain` previews exactly what
+        # launches here.
+        flag_patches = flag_patches.merge(
+            patches_from_model_path_flag(model_path, config_manager.config)
+        )
     try:
         merged_config = config_manager.merge_config(
             extra_args,
             set_values=set_values or [],
-            extra_patches=mem_fraction_patches,
+            extra_patches=flag_patches,
         )
     except ConfigPathError as exc:
         # Unknown path, unwritable path, or two sources disagreeing at one
         # precedence. Every one of these carries a message written to be read;
         # a traceback would bury it under the merge internals.
         raise typer.BadParameter(str(exc)) from exc
-    if model_path is not None:
-        merged_config = merged_config.model_copy(update={"model_path": model_path})
     if colocate:
         _validate_colocate_config(merged_config)
     merged_config = apply_encoder_mem_reserve_cli_override(

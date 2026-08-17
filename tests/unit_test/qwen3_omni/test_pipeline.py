@@ -1324,7 +1324,7 @@ def test_qwen_cli_encoder_mem_reserve_survives_runtime_overrides_overlay() -> No
     assert resolved["encoder_mem_reserve"] == 0.15
 
 
-def test_qwen_cli_thinker_tp_override_keeps_parallelism_alias_in_sync() -> None:
+def test_qwen_cli_thinker_tp_override_applies_tp_size_and_gpus() -> None:
     config = Qwen3OmniSpeechPipelineConfig(model_path="dummy")
 
     config = apply_parallelism_cli_overrides(
@@ -1337,7 +1337,6 @@ def test_qwen_cli_thinker_tp_override_keeps_parallelism_alias_in_sync() -> None:
 
     thinker = _stage(config, "thinker")
     assert thinker.tp_size == 2
-    assert thinker.parallelism.tp == 2
     assert thinker.gpu == [0, 1]
 
 
