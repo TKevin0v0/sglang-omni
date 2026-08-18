@@ -8,9 +8,8 @@ from typing import ClassVar
 from sglang_omni.config import (
     EngineArgs,
     EngineStageConfig,
-    ModelGroup,
+    FactoryArgs,
     PipelineConfig,
-    SchedulerConfig,
     StageConfig,
 )
 
@@ -44,8 +43,8 @@ class ArkasrPipelineConfig(PipelineConfig):
         EngineStageConfig(
             name="asr",
             process="asr",
-            factory=f"{_PKG}.stages.create_sglang_arkasr_executor",
-            model=ModelGroup(
+factory_path=f"{_PKG}.stages.create_sglang_arkasr_executor",
+            factory=FactoryArgs(
                 device="cuda:0",
                 max_new_tokens=256,
                 encoder_max_batch_size=8,
@@ -57,12 +56,10 @@ class ArkasrPipelineConfig(PipelineConfig):
                 pre_lm_max_batch_size=8,
                 pre_lm_max_batch_wait_ms=0,
                 pre_lm_max_pending=32,
-            ),
-            engine=EngineArgs(max_running_requests=32),
-            scheduler=SchedulerConfig(
                 request_build_max_workers=2,
                 request_build_max_pending=16,
             ),
+            engine=EngineArgs(max_running_requests=32),
             gpu=0,
             terminal=True,
         )

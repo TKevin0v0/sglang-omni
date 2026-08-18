@@ -15,11 +15,10 @@ from sglang_omni.config.schema import (
     EndpointsConfig,
     EngineArgs,
     EngineStageConfig,
-    ModelGroup,
+    FactoryArgs,
     PipelineConfig,
     PlacementConfig,
     ProcessConfig,
-    SchedulerConfig,
     StageConfig,
 )
 from sglang_omni.config.topology import (
@@ -56,8 +55,7 @@ __all__ = [
     "StageConfig",
     "EngineStageConfig",
     "EngineArgs",
-    "SchedulerConfig",
-    "ModelGroup",
+    "FactoryArgs",
     "PlacementConfig",
     "CommConfig",
     "EndpointsConfig",
