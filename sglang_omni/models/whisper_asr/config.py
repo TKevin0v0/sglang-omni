@@ -45,7 +45,7 @@ class WhisperASRPipelineConfig(PipelineConfig):
         EngineStageConfig(
             name="asr",
             process="asr",
-factory_path=f"{_PKG}.stages.create_sglang_whisper_asr_executor",
+            factory_path=f"{_PKG}.stages.create_sglang_whisper_asr_executor",
             engine=EngineArgs(max_running_requests=64),
             factory=FactoryArgs(
                 device="cuda:0",
