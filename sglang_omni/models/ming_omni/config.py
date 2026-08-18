@@ -8,6 +8,8 @@ from typing import Any, ClassVar
 from pydantic import Field
 
 from sglang_omni.config.schema import (
+    EngineStageConfig,
+    FactoryArgs,
     PipelineConfig,
     PlacementConfig,
     ProcessConfig,
@@ -105,7 +107,7 @@ def _audio_encoder_stage(*, gpu: int, process: str) -> StageConfig:
         name=AUDIO_STAGE,
         process=process,
         factory_path=f"{_PKG}.stages.create_audio_encoder_executor",
-        factory_args={"device": "cuda", "dtype": None},
+        factory=FactoryArgs(device="cuda", dtype=None),
         gpu=gpu,
         next=AGGREGATE_STAGE,
         project_payload={
@@ -121,7 +123,7 @@ def _image_encoder_stage(
         name=IMAGE_STAGE,
         process=process,
         factory_path=f"{_PKG}.stages.create_image_encoder_executor",
-        factory_args={"device": "cuda", "dtype": None},
+        factory=FactoryArgs(device="cuda", dtype=None),
         gpu=gpu,
         tp_size=tp_size,
         next=AGGREGATE_STAGE,
@@ -150,11 +152,11 @@ def _thinker_stage(*, gpu: int, speech_enabled: bool, process: str) -> StageConf
     if speech_enabled:
         project_payload[TALKER_STAGE] = f"{_PKG}.stages.project_thinker_to_talker"
 
-    return StageConfig(
+    return EngineStageConfig(
         name=THINKER_STAGE,
         process=process,
         factory_path=f"{_PKG}.stages.create_sglang_thinker_executor_from_config",
-        factory_args={"thinker_max_seq_len": 8192},
+        factory=FactoryArgs(thinker_max_seq_len=8192),
         gpu=gpu,
         next=[DECODE_STAGE, TALKER_STAGE] if speech_enabled else DECODE_STAGE,
         stream_to=[DECODE_STAGE],
@@ -173,7 +175,7 @@ def _streaming_thinker_stage(*, gpu: int, process: str) -> StageConfig:
         name=THINKER_STAGE,
         process=process,
         factory_path=f"{_PKG}.stages.create_sglang_thinker_executor_from_config",
-        factory_args={"thinker_max_seq_len": 8192, "enable_streaming_tts": True},
+        factory=FactoryArgs(thinker_max_seq_len=8192, enable_streaming_tts=True),
         gpu=gpu,
         next=[DECODE_STAGE, SEGMENTER_STAGE],
         stream_to=[DECODE_STAGE, SEGMENTER_STAGE],
@@ -200,7 +202,7 @@ def _talker_stream_stage(*, gpu: int, process: str) -> StageConfig:
         name=TALKER_STREAM_STAGE,
         process=process,
         factory_path=f"{_PKG}.stages.create_streaming_talker_executor",
-        factory_args={"device": "cuda", "voice": "DB30"},
+        factory=FactoryArgs(device="cuda", voice="DB30"),
         gpu=gpu,
         terminal=True,
         can_accept_stream_before_payload=True,
@@ -222,7 +224,7 @@ def _talker_stage(*, gpu: int, process: str) -> StageConfig:
         name=TALKER_STAGE,
         process=process,
         factory_path=f"{_PKG}.stages.create_talker_executor",
-        factory_args={"device": "cuda", "voice": "DB30"},
+        factory=FactoryArgs(device="cuda", voice="DB30"),
         gpu=gpu,
         terminal=True,
     )
@@ -267,13 +269,12 @@ def _ming_streaming_speech_stages() -> list[StageConfig]:
 class _MingOmniBasePipelineConfig(PipelineConfig):
     architecture: ClassVar[str] = "BailingMM2NativeForConditionalGeneration"
     architecture_aliases: ClassVar[tuple[str, ...]] = ("BailingMoeV2ForCausalLM",)
+    stage_config_types: ClassVar[dict[str, type[StageConfig]]] = {
+        THINKER_STAGE: EngineStageConfig,
+    }
     tensor_parallel_disable_custom_all_reduce_stages: ClassVar[tuple[str, ...]] = (
         THINKER_STAGE,
     )
-
-    @classmethod
-    def mem_fraction_role_to_stage(cls) -> dict[str, str]:
-        return {"thinker": THINKER_STAGE}
 
     @classmethod
     def topology_gated_custom_all_reduce_stages(cls) -> set[str]:
@@ -299,10 +300,6 @@ class MingOmniPipelineConfig(_MingOmniBasePipelineConfig):
 
 class MingOmniSpeechPipelineConfig(_MingOmniBasePipelineConfig):
     """7-stage speech pipeline."""
-
-    @classmethod
-    def talker_role_to_stage(cls) -> dict[str, str]:
-        return {"talker": TALKER_STAGE}
 
     model_path: str
     entry_stage: str = PREPROCESSING_STAGE
@@ -331,10 +328,6 @@ class MingOmniStreamingSpeechPipelineConfig(_MingOmniBasePipelineConfig):
     and streams per-token deltas to ``segmenter`` via stream_to. The
     streaming talker emits audio chunks to the coordinator (terminal).
     """
-
-    @classmethod
-    def talker_role_to_stage(cls) -> dict[str, str]:
-        return {"talker": TALKER_STREAM_STAGE}
 
     model_path: str
     entry_stage: str = PREPROCESSING_STAGE
