@@ -4,13 +4,12 @@ from __future__ import annotations
 import pytest
 
 from sglang_omni.config import (
+    EngineArgs,
+    EngineStageConfig,
+    ModelGroup,
     PipelineConfig,
     PlacementConfig,
-    ProcessConfig,
-    SGLangServerArgsConfig,
     StageConfig,
-    StageResourceConfig,
-    StageRuntimeConfig,
 )
 
 _FACTORY = "tests.unit_test.fixtures.pipeline_fakes.dummy_factory"
@@ -24,40 +23,73 @@ def _stage(**kwargs) -> StageConfig:
         "terminal": True,
     }
     data.update(kwargs)
+    cls = kwargs.pop("cls", None)
+    if cls is not None:
+        data.pop("cls", None)
+        return cls(**data)
     return StageConfig(**data)
 
 
-def test_stage_runtime_schema_accepts_typed_runtime_values() -> None:
-    stage = _stage(
-        runtime=StageRuntimeConfig(
-            resources=StageResourceConfig(total_gpu_memory_fraction=0.25),
-            max_seq_len=8192,
-            video_fps=2.0,
-            sglang_server_args=SGLangServerArgsConfig(mem_fraction_static=0.7),
-        ),
-        runtime_arg_map={"max_seq_len": "thinker_max_seq_len"},
+def _engine_stage(**kwargs) -> EngineStageConfig:
+    data = {
+        "name": "stage",
+        "process": "pipeline",
+        "factory": _FACTORY,
+        "terminal": True,
+    }
+    data.update(kwargs)
+    return EngineStageConfig(**data)
+
+
+def test_stage_accepts_typed_values_in_every_consumer_group() -> None:
+    stage = _engine_stage(
+        gpu_memory_fraction=0.25,
+        engine={"mem_fraction_static": 0.7},
+        scheduler={"max_concurrency": 4},
+        model={"max_seq_len": 8192, "video_fps": 2.0},
     )
 
-    assert stage.runtime.resources.total_gpu_memory_fraction == 0.25
-    assert stage.runtime.sglang_server_args.mem_fraction_static == 0.7
-    assert stage.runtime_arg_map["max_seq_len"] == "thinker_max_seq_len"
+    assert stage.gpu_memory_fraction == 0.25
+    assert stage.engine.mem_fraction_static == 0.7
+    assert stage.scheduler.max_concurrency == 4
+    assert stage.model.max_seq_len == 8192
+    assert stage.model.video_fps == 2.0
 
 
-def test_invalid_total_gpu_memory_fraction_raises() -> None:
-    with pytest.raises(ValueError, match="total_gpu_memory_fraction"):
-        StageResourceConfig(total_gpu_memory_fraction=0.0)
+def test_invalid_gpu_memory_fraction_raises() -> None:
+    with pytest.raises(ValueError, match="gpu_memory_fraction"):
+        _stage(gpu_memory_fraction=0.0)
 
 
-def test_invalid_sglang_mem_fraction_static_raises() -> None:
+def test_invalid_engine_mem_fraction_static_raises() -> None:
     with pytest.raises(ValueError, match="mem_fraction_static"):
-        SGLangServerArgsConfig(mem_fraction_static=1.0)
+        EngineArgs(mem_fraction_static=1.0)
 
 
-def test_invalid_stage_runtime_values_raise() -> None:
+def test_invalid_model_group_values_raise() -> None:
     with pytest.raises(ValueError, match="max_seq_len"):
-        StageRuntimeConfig(max_seq_len=0)
+        ModelGroup(max_seq_len=0)
     with pytest.raises(ValueError, match="video_fps"):
-        StageRuntimeConfig(video_fps=-1.0)
+        ModelGroup(video_fps=-1.0)
+
+
+def test_the_engine_block_is_refused_off_engine_stages() -> None:
+    with pytest.raises(ValueError, match="not an engine stage"):
+        _stage(engine={"mem_fraction_static": 0.7})
+
+
+def test_undeclared_group_keys_pass_through_to_the_consumer() -> None:
+    """The group vocabularies belong to the modules that read them; the
+    schema keeps unknown keys instead of guessing at their legality."""
+    stage = _engine_stage(
+        engine={"disable_radix_cache": True},
+        scheduler={"made_up_knob": 7},
+        model={"lookahead": 9},
+    )
+
+    assert stage.engine.overrides()["disable_radix_cache"] is True
+    assert stage.scheduler.model_extra["made_up_knob"] == 7
+    assert stage.model.model_extra["lookahead"] == 9
 
 
 def test_stage_rejects_terminal_with_next() -> None:
@@ -80,34 +112,6 @@ def test_tp_size_accepts_a_matching_gpu_list() -> None:
 def test_tp_size_below_one_raises() -> None:
     with pytest.raises(ValueError, match="tp_size >= 1"):
         _stage(tp_size=0)
-
-
-@pytest.mark.parametrize(
-    ("gpu", "tp_size", "message"),
-    [
-        (None, 2, "gpu is required"),
-        (0, 2, "gpu has 1 entries"),
-        ([0, 0], 2, "GPU ids must be unique"),
-        (-1, 1, "GPU ids must be >= 0"),
-    ],
-)
-def test_invalid_stage_gpu_placement_raises(
-    gpu: int | list[int] | None,
-    tp_size: int,
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        _stage(gpu=gpu, tp_size=tp_size)
-
-
-def test_process_replica_devices_are_normalized_at_entry() -> None:
-    assert ProcessConfig(replica_devices="0, 2").replica_devices == [0, 2]
-
-
-@pytest.mark.parametrize("replica_devices", ["0,,1", [-1]])
-def test_invalid_process_replica_devices_raise(replica_devices: object) -> None:
-    with pytest.raises(ValueError, match="replica_devices"):
-        ProcessConfig(replica_devices=replica_devices)
 
 
 def test_pipeline_accepts_placement_config() -> None:
