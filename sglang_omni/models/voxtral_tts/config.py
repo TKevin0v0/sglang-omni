@@ -5,7 +5,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from sglang_omni.config import PipelineConfig, StageConfig
+from sglang_omni.config import (
+    EngineStageConfig,
+    ModelGroup,
+    PipelineConfig,
+    StageConfig,
+)
 from sglang_omni.models.voxtral_tts.pipeline.next_stage import (
     GENERATION_STAGE,
     PREPROCESSING_STAGE,
@@ -19,9 +24,9 @@ class VoxtralTTSPipelineConfig(PipelineConfig):
     architecture: ClassVar[str] = "VoxtralTTSForConditionalGeneration"
     requires_model_capabilities: ClassVar[bool] = True
 
-    @classmethod
-    def generation_sglang_role_to_stage(cls) -> dict[str, str]:
-        return {"generation": "tts_generation"}
+    stage_config_types: ClassVar[dict[str, type[StageConfig]]] = {
+        GENERATION_STAGE: EngineStageConfig,
+    }
 
     @classmethod
     def process_local_edges(cls) -> frozenset[tuple[str, str]]:
@@ -38,11 +43,11 @@ class VoxtralTTSPipelineConfig(PipelineConfig):
             factory=f"{_PKG}.stages.create_preprocessing_executor",
             next=GENERATION_STAGE,
         ),
-        StageConfig(
+        EngineStageConfig(
             name=GENERATION_STAGE,
             process="pipeline",
             factory=f"{_PKG}.stages.create_generation_executor",
-            factory_args={"max_new_tokens": 4096},
+            model=ModelGroup(max_new_tokens=4096),
             gpu=0,
             next=VOCODER_STAGE,
         ),

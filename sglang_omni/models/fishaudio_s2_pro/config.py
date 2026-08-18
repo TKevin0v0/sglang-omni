@@ -5,7 +5,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from sglang_omni.config import PipelineConfig, StageConfig
+from sglang_omni.config import (
+    EngineStageConfig,
+    ModelGroup,
+    PipelineConfig,
+    StageConfig,
+)
 
 _PKG = "sglang_omni.models.fishaudio_s2_pro"
 
@@ -16,13 +21,9 @@ class S2ProPipelineConfig(PipelineConfig):
     architecture: ClassVar[str] = "FishQwen3OmniForCausalLM"
     requires_model_capabilities: ClassVar[bool] = True
 
-    @classmethod
-    def talker_sglang_role_to_stage(cls) -> dict[str, str]:
-        return {"talker": "tts_engine"}
-
-    @classmethod
-    def generation_sglang_role_to_stage(cls) -> dict[str, str]:
-        return {"generation": "tts_engine"}
+    stage_config_types: ClassVar[dict[str, type[StageConfig]]] = {
+        "tts_engine": EngineStageConfig,
+    }
 
     model_path: str
     stages: list[StageConfig] = [
@@ -32,11 +33,11 @@ class S2ProPipelineConfig(PipelineConfig):
             factory=f"{_PKG}.stages.create_preprocessing_executor",
             next="tts_engine",
         ),
-        StageConfig(
+        EngineStageConfig(
             name="tts_engine",
             process="pipeline",
             factory=f"{_PKG}.stages.create_sglang_tts_engine_executor",
-            factory_args={"device": "cuda:0", "max_new_tokens": 2048},
+            model=ModelGroup(device="cuda:0", max_new_tokens=2048),
             gpu=0,
             next="vocoder",
             stream_to=["vocoder"],
