@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from pydantic import Field
+
 from sglang_omni.config import (
     EngineArgs,
     EngineStageConfig,
@@ -14,6 +16,22 @@ from sglang_omni.config import (
 )
 
 _PKG = "sglang_omni.models.arkasr"
+
+
+class ArkasrFactoryArgs(FactoryArgs):
+    """ARK-ASR's own constructor knobs, typed like the shared ones."""
+
+    encoder_max_batch_size: int | None = Field(default=None, ge=1)
+    enable_pre_lm_encoder: bool | None = None
+    pre_lm_cache_max_entries: int | None = Field(default=None, ge=1)
+    pre_lm_cache_size_bytes: int | None = Field(default=None, ge=1)
+    pre_lm_max_batch_size: int | None = Field(default=None, ge=1)
+    pre_lm_max_batch_wait_ms: int | None = Field(default=None, ge=0)
+    pre_lm_max_pending: int | None = Field(default=None, ge=1)
+
+
+class ArkasrStageConfig(EngineStageConfig):
+    factory: ArkasrFactoryArgs = Field(default_factory=ArkasrFactoryArgs)
 
 
 class ArkasrPipelineConfig(PipelineConfig):
@@ -33,18 +51,18 @@ class ArkasrPipelineConfig(PipelineConfig):
 ||||||| parent of 37bfa830 ([Config] Migrate model configs, example YAMLs and launchers to the grouped surface)
 =======
     stage_config_types: ClassVar[dict[str, type[StageConfig]]] = {
-        "asr": EngineStageConfig,
+        "asr": ArkasrStageConfig,
     }
 
 >>>>>>> 37bfa830 ([Config] Migrate model configs, example YAMLs and launchers to the grouped surface)
     model_path: str
     entry_stage: str = "asr"
     stages: list[StageConfig] = [
-        EngineStageConfig(
+        ArkasrStageConfig(
             name="asr",
             process="asr",
             factory_path=f"{_PKG}.stages.create_sglang_arkasr_executor",
-            factory=FactoryArgs(
+            factory=ArkasrFactoryArgs(
                 device="cuda:0",
                 max_new_tokens=256,
                 encoder_max_batch_size=8,
