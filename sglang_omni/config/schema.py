@@ -340,6 +340,22 @@ class StageConfig(BaseModel):
     def model_post_init(self, __context: Any = None) -> None:
         if self.tp_size < 1:
             raise ValueError(f"Stage {self.name!r} must have tp_size >= 1")
+        if isinstance(self.gpu, int) and self.tp_size > 1:
+            raise ValueError(
+                f"Stage {self.name!r}: TP placement requires a list of "
+                f"{self.tp_size} unique GPU ids, got scalar gpu={self.gpu}"
+            )
+        if isinstance(self.gpu, list):
+            if len(self.gpu) != self.tp_size:
+                raise ValueError(
+                    f"Stage {self.name!r}: gpu has {len(self.gpu)} entries "
+                    f"but tp_size={self.tp_size}"
+                )
+            if len(set(self.gpu)) != len(self.gpu):
+                raise ValueError(
+                    f"Stage {self.name!r}: TP placement requires unique GPU "
+                    f"ids, got {list(self.gpu)}"
+                )
         if self.process is not None:
             self.process = self.process.strip()
             if not self.process:

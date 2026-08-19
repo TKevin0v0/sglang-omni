@@ -127,6 +127,30 @@ def test_tp_memory_fraction_is_per_rank_per_assigned_gpu() -> None:
     assert plan.gpus[1].total_gpu_memory_fraction == pytest.approx(0.30)
 
 
+def test_tp_scalar_gpu_is_rejected() -> None:
+    with pytest.raises(ValueError, match="requires a list"):
+        _stage(
+            "thinker",
+            gpu=0,
+            fraction=0.45,
+            tp_size=2,
+            terminal=True,
+        )
+
+
+def test_tp_duplicate_gpu_ids_are_rejected() -> None:
+    # Shape rules live on StageConfig now: the duplicate ids never survive
+    # long enough to reach the placement planner.
+    with pytest.raises(ValueError, match="unique GPU ids"):
+        _stage(
+            "thinker",
+            gpu=[0, 0],
+            fraction=0.45,
+            tp_size=2,
+            terminal=True,
+        )
+
+
 def test_placement_policy_hook_runs_after_generic_plan() -> None:
     config = PipelineConfig(
         model_path="dummy",
