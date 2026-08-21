@@ -96,6 +96,18 @@ def _make_engine_builder(
     return builder
 
 
+def test_qwen3_asr_engine_builder_binds_encode_wait_policy() -> None:
+    builder = _make_engine_builder()
+    assert builder.should_wait_for_encode() is False
+
+    builder.post_scheduler_setup(
+        SimpleNamespace(request_build_queue_fits_workers=lambda: True),
+        object(),
+    )
+
+    assert builder.should_wait_for_encode() is True
+
+
 @pytest.mark.parametrize(
     ("sm_version", "expected_backend"),
     [(89, None), (100, "triton_attn"), (120, "triton_attn")],
