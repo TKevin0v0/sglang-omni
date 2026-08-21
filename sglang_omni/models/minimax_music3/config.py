@@ -121,11 +121,6 @@ class MiniMaxMusic3PipelineConfig(PipelineConfig):
             PlacementConfig() if _visible_gpu_count() >= 2 else _colocated_placement()
         )
     )
-    placement: PlacementConfig = Field(
-        default_factory=lambda: (
-            PlacementConfig() if _visible_gpu_count() >= 2 else _colocated_placement()
-        )
-    )
 
     @classmethod
     def process_local_edges(cls) -> frozenset[tuple[str, str]]:
