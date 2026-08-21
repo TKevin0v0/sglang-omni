@@ -28,6 +28,10 @@ class FunCosyVoice3PipelineConfig(PipelineConfig):
         return {"talker": "tts_engine"}
 
     @classmethod
+    def talker_sglang_role_to_stage(cls) -> dict[str, str]:
+        return {"talker": "tts_engine"}
+
+    @classmethod
     def process_safe_edges(cls) -> frozenset[tuple[str, str]]:
         return frozenset({("tts_engine", "vocoder")})
 
@@ -57,6 +61,7 @@ class FunCosyVoice3PipelineConfig(PipelineConfig):
             factory_args={"dtype": "bfloat16"},
             gpu=0,
             next="vocoder",
+            stream_to=["vocoder"],
         ),
         StageConfig(
             name="vocoder",
@@ -65,6 +70,7 @@ class FunCosyVoice3PipelineConfig(PipelineConfig):
             factory_args={"dtype": "bfloat16"},
             gpu=0,
             terminal=True,
+            can_accept_stream_before_payload=True,
         ),
     ]
 
