@@ -25,6 +25,22 @@ class S2ProPipelineConfig(PipelineConfig):
         "tts_engine": EngineStageConfig,
     }
 
+    @classmethod
+    def process_safe_edges(cls) -> frozenset[tuple[str, str]]:
+        # preprocessing -> tts_engine is already cross-process by default.
+        return frozenset({("preprocessing", "tts_engine"), ("tts_engine", "vocoder")})
+
+    @classmethod
+    def process_edge_resources(
+        cls,
+    ) -> dict[tuple[str, str], dict[str, float]]:
+        return {
+            ("tts_engine", "vocoder"): {
+                "tts_engine": 0.85,
+                "vocoder": 0.10,
+            }
+        }
+
     model_path: str
     stages: list[StageConfig] = [
         StageConfig(

@@ -28,12 +28,31 @@ class VoxtralTTSPipelineConfig(PipelineConfig):
         GENERATION_STAGE: EngineStageConfig,
     }
 
+<<<<<<< HEAD
     @classmethod
     def process_local_edges(cls) -> frozenset[tuple[str, str]]:
         # Note (kaige): this payload is transport-complete, but preserve the
         # previous process-split allowlist in this PR and relax it separately.
         return frozenset({(PREPROCESSING_STAGE, GENERATION_STAGE)})
 
+||||||| parent of e13dd697 (Restore process-isolation hooks the migration dropped)
+=======
+    @classmethod
+    def process_safe_edges(cls) -> frozenset[tuple[str, str]]:
+        return frozenset({(GENERATION_STAGE, VOCODER_STAGE)})
+
+    @classmethod
+    def process_edge_resources(
+        cls,
+    ) -> dict[tuple[str, str], dict[str, float]]:
+        return {
+            (GENERATION_STAGE, VOCODER_STAGE): {
+                GENERATION_STAGE: 0.85,
+                VOCODER_STAGE: 0.10,
+            }
+        }
+
+>>>>>>> e13dd697 (Restore process-isolation hooks the migration dropped)
     model_path: str
     entry_stage: str = "preprocessing"
     stages: list[StageConfig] = [
