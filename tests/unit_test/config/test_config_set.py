@@ -55,7 +55,9 @@ def stage(config: PipelineConfig, name: str):
 
 class TestDottedCli:
     def test_text_is_coerced_to_the_declared_type(self, pipeline_config):
-        patches = patches_from_dotted_cli([("thinker.tp_size", "2")], pipeline_config)
+        patches = patches_from_dotted_cli(
+            [("thinker.tp_size", "2"), ("thinker.gpu", "[0, 1]")], pipeline_config
+        )
         resolved = resolve(pipeline_config, patches)
         assert stage(resolved, "thinker").tp_size == 2
 
@@ -357,7 +359,8 @@ class TestPrecedence:
             {"thinker": {"tp_size": 2}}, type(pipeline_config), ["thinker"]
         )
         cli_patches = patches_from_dotted_cli(
-            [("thinker.tp_size", "4")], pipeline_config
+            [("thinker.tp_size", "4"), ("thinker.gpu", "[0, 1, 2, 3]")],
+            pipeline_config,
         )
         resolved = resolve(pipeline_config, file_patches, cli_patches)
         assert stage(resolved, "thinker").tp_size == 4
@@ -371,7 +374,9 @@ class TestPrecedence:
 class TestManager:
     def test_merge_config_applies_dotted_pairs(self, pipeline_config):
         manager = ConfigManager(pipeline_config)
-        merged = manager.merge_config([("thinker.tp_size", "2")])
+        merged = manager.merge_config(
+            [("thinker.tp_size", "2"), ("thinker.gpu", "[0, 1]")]
+        )
         assert stage(merged, "thinker").tp_size == 2
 
     def test_a_flag_repeated_with_different_values_is_refused(self, pipeline_config):
@@ -382,7 +387,11 @@ class TestManager:
     def test_a_flag_repeated_with_the_same_value_is_tolerated(self, pipeline_config):
         manager = ConfigManager(pipeline_config)
         merged = manager.merge_config(
-            [("thinker.tp_size", "2"), ("thinker.tp_size", "2")]
+            [
+                ("thinker.tp_size", "2"),
+                ("thinker.tp_size", "2"),
+                ("thinker.gpu", "[0, 1]"),
+            ]
         )
         assert stage(merged, "thinker").tp_size == 2
 
@@ -391,7 +400,10 @@ class TestManager:
         extra = ConfigPatchSet().merge(
             patches_from_model_path_flag("/models/flag", pipeline_config)
         )
-        merged = manager.merge_config([("thinker.tp_size", "2")], extra_patches=extra)
+        merged = manager.merge_config(
+            [("thinker.tp_size", "2"), ("thinker.gpu", "[0, 1]")],
+            extra_patches=extra,
+        )
         assert merged.model_path == "/models/flag"
         assert stage(merged, "thinker").tp_size == 2
 

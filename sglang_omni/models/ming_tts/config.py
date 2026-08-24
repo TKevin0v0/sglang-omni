@@ -206,7 +206,6 @@ class MingTTSPipelineConfig(PipelineConfig):
         AUDIO_DECODE_STAGE: MingTTSAudioDecodeStageConfig,
     }
 
-<<<<<<< HEAD
     @classmethod
     def process_local_edges(cls) -> frozenset[tuple[str, str]]:
         # Note (kaige): both payloads are transport-complete, but preserve the
@@ -218,30 +217,6 @@ class MingTTSPipelineConfig(PipelineConfig):
             }
         )
 
-||||||| parent of e13dd697 (Restore process-isolation hooks the migration dropped)
-=======
-    @classmethod
-    def isolation_role_to_stage(cls) -> dict[str, str]:
-        return {"vocoder": AUDIO_DECODE_STAGE}
-
-    @classmethod
-    def process_safe_edges(cls) -> frozenset[tuple[str, str]]:
-        return frozenset({(TTS_ENGINE_STAGE, AUDIO_DECODE_STAGE)})
-
-    @classmethod
-    def process_edge_resources(
-        cls,
-    ) -> dict[tuple[str, str], dict[str, float]]:
-        return {
-            (TTS_ENGINE_STAGE, AUDIO_DECODE_STAGE): {
-                REFERENCE_ENCODE_STAGE: 0.08,
-                TTS_ENGINE_STAGE: 0.72,
-                AUDIO_DECODE_STAGE: 0.12,
-            }
-        }
-
->>>>>>> e13dd697 (Restore process-isolation hooks the migration dropped)
-    model_path: str
     entry_stage: str = PREPROCESSING_STAGE
     stages: list[StageConfig] = [
         MingTTSPreprocessingStageConfig(

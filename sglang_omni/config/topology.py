@@ -286,64 +286,6 @@ def _build_process_groups(
 ) -> list[ProcessGroupPlacement]:
     non_tp_stages = [stage for stage in stages if stage.tp_size == 1]
 
-    components = _resolve_non_tp_process_components(config, non_tp_stages)
-    used_names: set[str] = set()
-    groups: list[ProcessGroupPlacement] = []
-    for component in components.values():
-        group_name = _component_process_name(component, used_names)
-        groups.append(
-            ProcessGroupPlacement(
-                name=group_name,
-                stage_names=tuple(stage.name for stage in component),
-                gpu_id=_resolve_group_gpu_id(group_name, component, gpu_placement),
-            )
-        )
-    return groups
-
-
-def _resolve_non_tp_process_components(
-    config: PipelineConfig,
-    stages: list[StageConfig],
-) -> OrderedDict[str, list[StageConfig]]:
-    parent = {stage.name: stage.name for stage in stages}
-    stage_by_name = {stage.name: stage for stage in stages}
-
-    def find(name: str) -> str:
-        root = name
-        while parent[root] != root:
-            root = parent[root]
-        while parent[name] != name:
-            next_name = parent[name]
-            parent[name] = root
-            name = next_name
-        return root
-
-    def union(left: str, right: str) -> None:
-        left_root = find(left)
-        right_root = find(right)
-        if left_root != right_root:
-            parent[right_root] = left_root
-
-    by_process: OrderedDict[str, list[str]] = OrderedDict()
-    for stage in stages:
-        by_process.setdefault(stage.process or "", []).append(stage.name)
-    for stage_names in by_process.values():
-        first = stage_names[0]
-        for stage_name in stage_names[1:]:
-            union(first, stage_name)
-
-    for group in config.fused_stages or []:
-        local_stage_names = [
-            stage_name
-            for stage_name in group
-            if stage_name in stage_by_name and stage_by_name[stage_name].tp_size == 1
-        ]
-        if not local_stage_names:
-            continue
-        first = local_stage_names[0]
-        for stage_name in local_stage_names[1:]:
-            union(first, stage_name)
-
     components: OrderedDict[str, list[StageConfig]] = OrderedDict()
     for stage in non_tp_stages:
         components.setdefault(stage_process_name(stage), []).append(stage)

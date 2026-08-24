@@ -81,7 +81,10 @@ class TestResolve:
 
     def test_tp_size_text_is_coerced_and_applied(self, pipeline_config: PipelineConfig):
         resolved = ConfigResolver(pipeline_config).resolve(
-            patchset(make(pipeline_config, "stages.thinker.tp_size", "4"))
+            patchset(
+                make(pipeline_config, "stages.thinker.tp_size", "4"),
+                make(pipeline_config, "stages.thinker.gpu", "[0, 1, 2, 3]"),
+            )
         )
         assert resolved.config.stages[1].tp_size == 4
 
@@ -102,14 +105,20 @@ class TestProvenance:
 
     def test_records_the_pre_patch_value(self, pipeline_config: PipelineConfig):
         resolved = ConfigResolver(pipeline_config).resolve(
-            patchset(make(pipeline_config, "stages.thinker.tp_size", 4))
+            patchset(
+                make(pipeline_config, "stages.thinker.tp_size", 4),
+                make(pipeline_config, "stages.thinker.gpu", [0, 1, 2, 3]),
+            )
         )
         assert resolved.provenance.baseline["stages.thinker.tp_size"] == 1
 
     def test_untouched_paths_are_not_explained(self, pipeline_config: PipelineConfig):
         """`config explain` asks touched() first and reports the default itself."""
         resolved = ConfigResolver(pipeline_config).resolve(
-            patchset(make(pipeline_config, "stages.thinker.tp_size", 4))
+            patchset(
+                make(pipeline_config, "stages.thinker.tp_size", 4),
+                make(pipeline_config, "stages.thinker.gpu", [0, 1, 2, 3]),
+            )
         )
         assert not resolved.provenance.touched("stages.thinker.process")
         assert resolved.provenance.winner("stages.thinker.process") is None

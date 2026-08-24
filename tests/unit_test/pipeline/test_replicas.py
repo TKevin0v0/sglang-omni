@@ -23,7 +23,7 @@ from sglang_omni.pipeline.replicas import (
 
 
 def _stage(name: str, **kwargs) -> StageConfig:
-    defaults = dict(factory="pkg.mod.create", terminal=True, process=name)
+    defaults = dict(factory_path="pkg.mod.create", terminal=True, process=name)
     defaults.update(kwargs)
     return StageConfig(name=name, **defaults)
 
@@ -544,13 +544,15 @@ class TestRemovedStageLevelReplicaConfig:
         assert "Extra inputs are not permitted" in str(exc_info.value)
 
     def test_stage_overrides_reject_replica_keys(self):
-        pytest.importorskip("transformers")
-        from sglang_omni.config import manager
+        from sglang_omni.config.sources import patches_from_stages_mapping
 
-        with pytest.raises(ValueError, match="unsupported keys"):
-            manager._apply_stage_overrides(
-                _config([_stage("code2wav")]),
+        config = _config([_stage("code2wav")])
+        with pytest.raises(Exception, match="num_replicas"):
+            patches_from_stages_mapping(
                 {"code2wav": {"num_replicas": 3}},
+                type(config),
+                [stage.name for stage in config.stages],
+                origin="test",
             )
 
 
@@ -565,17 +567,23 @@ class TestReservedStageNames:
 
 class TestRuntimeOverridesOnReplicas:
     def _config(self) -> PipelineConfig:
+        from sglang_omni.config import FactoryArgs
+
         return _config(
             [
                 _stage("src", terminal=False, next="gen", process="src"),
-                _stage("gen", gpu=1, process="gen"),
+                _stage(
+                    "gen",
+                    gpu=1,
+                    process="gen",
+                    factory=FactoryArgs(max_seq_len=4096),
+                ),
             ],
             processes={"gen": ProcessConfig(num_replicas=2, replica_devices="1,2")},
-            runtime_overrides={"gen": {"max_seq_len": 4096}},
         )
 
     def test_replica_instances_inherit_logical_overrides(self):
-        from sglang_omni.config.runtime import resolve_stage_static_factory_args
+        from sglang_omni.config.runtime import resolve_stage_typed_kwargs
 
         config = self._config()
         _, expanded, topology = _expand(config)
@@ -583,17 +591,17 @@ class TestRuntimeOverridesOnReplicas:
 
         for stage_cfg in expanded:
             if stage_cfg.name.startswith("gen@r"):
-                args = resolve_stage_static_factory_args(stage_cfg, config)
+                args = resolve_stage_typed_kwargs(stage_cfg)
                 assert (
                     args.get("max_seq_len") == 4096
-                ), f"{stage_cfg.name} lost the override configured for 'gen'"
+                ), f"{stage_cfg.name} lost the value configured for 'gen'"
 
     def test_unreplicated_stage_does_not_borrow_overrides(self):
-        from sglang_omni.config.runtime import resolve_stage_static_factory_args
+        from sglang_omni.config.runtime import resolve_stage_typed_kwargs
 
         config = self._config()
         src = {s.name: s for s in config.stages}["src"]
-        assert "max_seq_len" not in resolve_stage_static_factory_args(src, config)
+        assert "max_seq_len" not in resolve_stage_typed_kwargs(src)
 
 
 class TestReceiveSideLogicalNames:

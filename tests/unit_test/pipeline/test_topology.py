@@ -17,8 +17,10 @@ from sglang_omni.config import (
     StageConfig,
     build_process_topology_plan,
     build_stage_placement_plan,
+    compile_logical_processes,
 )
 from sglang_omni.config.manager import ConfigManager
+from sglang_omni.pipeline.replicas import expand_replica_stages
 
 _FACTORY = "tests.unit_test.fixtures.pipeline_fakes.dummy_factory"
 
@@ -46,8 +48,14 @@ def _stage(
 
 
 def _topology(config: PipelineConfig):
-    gpu_placement = build_stage_placement_plan(config)
-    return build_process_topology_plan(config, gpu_placement)
+    plan, stages = compile_logical_processes(config)
+    stages, replica_topology = expand_replica_stages(stages, plan)
+    gpu_placement = build_stage_placement_plan(
+        config,
+        stages_cfg=stages,
+        replica_instances=replica_topology.replicas,
+    )
+    return build_process_topology_plan(config, gpu_placement, stages_cfg=stages)
 
 
 def test_stage_process_parses_from_schema_and_dotted_overrides() -> None:
@@ -160,10 +168,8 @@ def test_same_gpu_multiple_processes_rejects_missing_budget() -> None:
             _stage("b", gpu=0, process="p1", terminal=True),
         ],
     )
-    gpu_placement = build_stage_placement_plan(config)
-
     with pytest.raises(ValueError, match="gpu_memory_fraction"):
-        build_process_topology_plan(config, gpu_placement)
+        _topology(config)
 
 
 def test_same_gpu_multiple_processes_rejects_over_budget() -> None:
@@ -187,10 +193,8 @@ def test_one_process_group_cannot_span_multiple_gpus() -> None:
             _stage("b", gpu=1, process="p0", terminal=True),
         ],
     )
-    gpu_placement = build_stage_placement_plan(config)
-
     with pytest.raises(ValueError, match="spans multiple GPUs"):
-        build_process_topology_plan(config, gpu_placement)
+        _topology(config)
 
 
 def test_tp_process_names_must_not_collide_with_non_tp_process_group() -> None:
@@ -201,21 +205,16 @@ def test_tp_process_names_must_not_collide_with_non_tp_process_group() -> None:
             _stage("thinker", gpu=[0, 1], tp_size=2, terminal=True),
         ],
     )
-    gpu_placement = build_stage_placement_plan(config)
-
     with pytest.raises(ValueError, match="collide"):
-        build_process_topology_plan(config, gpu_placement)
+        _topology(config)
 
 
 def test_tp_process_names_must_be_unique_across_tp_stages() -> None:
-    config = PipelineConfig(
-        model_path="dummy",
-        stages=[
-            _stage("a", gpu=[0, 1], tp_size=2, process="model", next_stage="b"),
-            _stage("b", gpu=[2, 3], tp_size=2, process="model", terminal=True),
-        ],
-    )
-    gpu_placement = build_stage_placement_plan(config)
-
-    with pytest.raises(ValueError, match="Duplicate TP process names"):
-        build_process_topology_plan(config, gpu_placement)
+    with pytest.raises(ValueError, match="claimed by multiple TP stages"):
+        PipelineConfig(
+            model_path="dummy",
+            stages=[
+                _stage("a", gpu=[0, 1], tp_size=2, process="model", next_stage="b"),
+                _stage("b", gpu=[2, 3], tp_size=2, process="model", terminal=True),
+            ],
+        )

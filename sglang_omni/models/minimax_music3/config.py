@@ -107,10 +107,6 @@ class MiniMaxMusic3PipelineConfig(PipelineConfig):
         "dit_dav": DitDavStageConfig,
     }
 
-    @classmethod
-    def process_safe_edges(cls) -> frozenset[tuple[str, str]]:
-        return frozenset({("minimax_music3_ar", "dit_dav")})
-
     stages: list[StageConfig] = Field(
         default_factory=lambda: (
             _two_gpu_stages() if _visible_gpu_count() >= 2 else _colocated_stages()
