@@ -35,6 +35,7 @@ def stage_process_name(stage: "StageConfig") -> str:
         raise ValueError(f"Stage {stage.name!r} must declare process")
     return stage.process
 
+
 logger = logging.getLogger(__name__)
 
 
