@@ -211,14 +211,28 @@ def create_vocoder_executor(
     dtype: str = "bfloat16",
     max_batch_size: int = 8,
     max_batch_wait_ms: int = 2,
+    enable_flow_npugraph: bool = False,
+    flow_npugraph_max_graphs: int = 8,
 ) -> SimpleScheduler:
     device = resolve_device_spec(device, gpu_id)
     checkpoint_dir = resolve_checkpoint(model_path)
+    install_flow_npugraph = None
+    if enable_flow_npugraph:
+        from sglang_omni.models.fun_cosyvoice3.flow_npugraph import (
+            enable_flow_npugraph as install_flow_npugraph,
+        )
+        from sglang_omni.models.fun_cosyvoice3.flow_npugraph import (
+            prepare_flow_npugraph_environment,
+        )
+
+        prepare_flow_npugraph_environment()
     flow, hift = _load_cosyvoice3_flow_hift(
         checkpoint_dir,
         device=device,
         fp16=(dtype == "float16"),
     )
+    if install_flow_npugraph is not None:
+        install_flow_npugraph(flow, max_graphs=flow_npugraph_max_graphs)
 
     return _CosyVoice3Vocoder(flow, hift, fp16=(dtype == "float16")).build_scheduler(
         max_batch_size=max_batch_size,
