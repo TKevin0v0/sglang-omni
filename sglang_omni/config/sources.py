@@ -59,6 +59,32 @@ __all__ = [
 ]
 
 
+class _DuplicateKeyRefusingLoader(yaml.SafeLoader):
+    """SafeLoader that refuses duplicate mapping keys instead of keeping the last.
+
+    yaml.safe_load silently collapses ``model_path`` written twice before any
+    patch exists, so same-precedence duplicate detection would never see the
+    conflict. Refusing at parse time keeps "one path, one writer per source"
+    true for the file surface too.
+    """
+
+    def construct_mapping(self, node, deep=False):  # type: ignore[override]
+        seen: set[Any] = set()
+        for key_node, _value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if isinstance(key, (dict, list, set)):
+                continue  # unhashable; let SafeLoader produce its own error
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    None,
+                    None,
+                    f"duplicate mapping key {key!r}",
+                    key_node.start_mark,
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
 # Top-level blocks earlier config surfaces accepted. They are refused with
 # directions rather than falling through to a generic unknown-field error,
 # because every one of them has an exact spelling in the current surface.
@@ -211,7 +237,6 @@ def patches_from_shared_block(
                         source,
                         root=config_cls,
                         specificity=Specificity.ROLE,
-                        coerce=False,
                     )
                 )
     return patches
@@ -248,13 +273,29 @@ def _select_stages(
                 f"this pipeline has: {', '.join(stage_names)}"
             )
         matched = [name for name in matched if name in wanted]
-    if select.get("engine"):
-        matched = [
-            name for name in matched if config_cls.stage_config_cls(name).engine_stage
-        ]
+    if "engine" in select:
+        engine = select["engine"]
+        if not isinstance(engine, bool):
+            raise ValueError(
+                f"{label}.select.engine must be true or false, got {engine!r}"
+            )
+        if engine:
+            matched = [
+                name
+                for name in matched
+                if config_cls.stage_config_cls(name).engine_stage
+            ]
     excluded = select.get("exclude") or []
-    if not isinstance(excluded, list):
+    if not isinstance(excluded, list) or not all(
+        isinstance(name, str) for name in excluded
+    ):
         raise ValueError(f"{label}.select.exclude must be a list of names")
+    missing_excluded = [name for name in excluded if name not in stage_names]
+    if missing_excluded:
+        raise ValueError(
+            f"{label}.select.exclude names unknown stage(s) {missing_excluded}; "
+            f"this pipeline has: {', '.join(stage_names)}"
+        )
     matched = [name for name in matched if name not in excluded]
     if not matched:
         raise ValueError(f"{label}.select matches no stage of this pipeline")
@@ -308,9 +349,9 @@ def patches_from_stages_mapping(
             )
         prefix = f"stages.{stage_name}"
         for path, value in _flatten(prefix, dict(body), config_cls):
-            patches.add(
-                ConfigPatch.create(path, value, source, root=config_cls, coerce=False)
-            )
+            # coerce applies the same lossless-scalar contract as dotted CLI
+            # flags, so ``tp_size: 32.0`` is refused rather than lax-converted.
+            patches.add(ConfigPatch.create(path, value, source, root=config_cls))
 
     return patches
 
@@ -330,13 +371,16 @@ def sources_from_config_file(
     # import this module's callers.
     from sglang_omni.models.registry import PIPELINE_CONFIG_REGISTRY
 
-    with open(file_path, "r") as f:
-        try:
-            data = yaml.safe_load(f)
-        except yaml.YAMLError as exc:
-            raise ValueError(
-                f"Config file {file_path!r} is not valid YAML: {exc}"
-            ) from exc
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            try:
+                data = yaml.load(f, Loader=_DuplicateKeyRefusingLoader)
+            except yaml.YAMLError as exc:
+                raise ValueError(
+                    f"Config file {file_path!r} is not valid YAML: {exc}"
+                ) from exc
+    except FileNotFoundError as exc:
+        raise ValueError(f"Config file {file_path!r} does not exist") from exc
     if not isinstance(data, dict):
         raise ValueError(f"Config file {file_path!r} must contain a mapping")
 
