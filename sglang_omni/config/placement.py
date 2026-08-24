@@ -142,14 +142,26 @@ def resolve_gpu_stage_names(plan: StagePlacementPlan) -> set[str]:
 
 def _resolve_stage_gpu_ids(stage: StageConfig) -> tuple[int, ...]:
     # Shape rules (scalar vs list, length == tp_size, unique ids) are
-    # enforced by StageConfig validation; here the declaration only needs
-    # normalizing into one id per rank.
+    # enforced by StageConfig validation, but launcher helpers mutate
+    # tp_size and gpu after construction, so re-check the TP shape here
+    # rather than expanding a scalar into duplicate ranks.
     gpu = stage.gpu
     if gpu is None:
         return ()
     if isinstance(gpu, int):
-        return tuple(gpu for _ in range(stage.tp_size))
-    return tuple(int(gpu_id) for gpu_id in gpu)
+        if stage.tp_size > 1:
+            raise ValueError(
+                f"Stage {stage.name!r}: TP placement requires a list of "
+                f"{stage.tp_size} unique GPU ids, got scalar gpu={gpu}"
+            )
+        return (gpu,)
+    gpu_ids = tuple(int(gpu_id) for gpu_id in gpu)
+    if len(gpu_ids) != stage.tp_size or len(set(gpu_ids)) != len(gpu_ids):
+        raise ValueError(
+            f"Stage {stage.name!r}: TP placement requires a list of "
+            f"{stage.tp_size} unique GPU ids, got gpu={list(gpu)}"
+        )
+    return gpu_ids
 
 
 def _build_gpu_placement(
