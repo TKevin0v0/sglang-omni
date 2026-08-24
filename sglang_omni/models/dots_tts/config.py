@@ -84,19 +84,23 @@ class DotsTTSPipelineConfig(PipelineConfig):
             raise ValueError("dots.tts currently supports tp_size=1 only")
         # note (guozhihao-224): preprocessing bakes the generation schedule the
         # latent engine executes, so num_steps and max_generate_length must
-        # agree between the two stages. The latent_engine group is the owner;
-        # a preprocessing value is refused rather than silently diverging (the
-        # batched flow rejects requests whose step count differs from the
-        # engine NFE). Unset preprocessing keys are derived at launch.
+        # agree between the two stages when both are set. The latent_engine
+        # group is the owner; a preprocessing value that conflicts with the
+        # latent_engine value is refused. Unset preprocessing keys are derived
+        # at launch from the latent_engine.
         preprocessing_extra = (
             self.stage_named("preprocessing").factory.model_extra or {}
         )
-        for derived_key in ("num_steps", "max_generate_length"):
-            if derived_key in preprocessing_extra:
+        latent_extra = self.stage_named("latent_engine").factory.model_extra or {}
+        for derived_key, default in (("num_steps", 4), ("max_generate_length", 500)):
+            pre_val = preprocessing_extra.get(derived_key)
+            lat_val = latent_extra.get(derived_key, default)
+            if pre_val is not None and int(pre_val) != int(lat_val):
                 raise ValueError(
-                    f"dots.tts preprocessing {derived_key!r} is derived from "
-                    f"the latent_engine stage; configure "
-                    f"latent_engine.factory.{derived_key} instead"
+                    f"dots.tts preprocessing {derived_key!r} ({int(pre_val)}) "
+                    f"disagrees with latent_engine {derived_key!r} ({int(lat_val)}); "
+                    f"configure only latent_engine.factory.{derived_key} and let "
+                    "preprocessing derive it, or set both to the same value"
                 )
         # note (guozhihao-224): stream_slots must match backbone concurrency
         # so a max_running_requests override cannot outrun vocoder admission
