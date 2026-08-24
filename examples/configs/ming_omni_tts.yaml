@@ -1,34 +1,30 @@
 config_cls: MingTTSPipelineConfig
 model_path: inclusionAI/Ming-omni-tts-16.8B-A3B
 name: ming-omni-tts
+# Stage topology (routing, factories, streaming) lives in MingTTSPipelineConfig;
+# this file only tunes placement, memory budgets and per-stage knobs.
 stages:
   preprocessing:
     process: preprocessing
-    factory_path: sglang_omni.models.ming_tts.stages.create_preprocessing_executor
     factory:
       context_length: 8192
       max_decode_steps_cap: 256
       max_concurrency: 1
-    next: reference_encode
 
   reference_encode:
     process: ming_tts_aux
-    factory_path: sglang_omni.models.ming_tts.stages.create_reference_encode_executor
     gpu: 0
     gpu_memory_fraction: 0.08
     factory:
       dtype: bfloat16
       context_length: 8192
       max_concurrency: 1
-    next: tts_engine
 
   tts_engine:
     process: tts_engine
-    factory_path: sglang_omni.models.ming_tts.stages.create_sglang_tts_engine_executor
     gpu: 0
     tp_size: 1
     gpu_memory_fraction: 0.72
-    stream_to: [audio_decode]
     factory:
       dtype: bfloat16
       context_length: 8192
@@ -45,11 +41,9 @@ stages:
       mem_fraction_static: 0.75
       cuda_graph_bs: [1, 2, 4, 8]
       cuda_graph_max_bs: 8
-    next: audio_decode
 
   audio_decode:
     process: ming_tts_aux
-    factory_path: sglang_omni.models.ming_tts.stages.create_audio_decode_executor
     gpu: 0
     gpu_memory_fraction: 0.12
     factory:
@@ -58,5 +52,3 @@ stages:
       steady_chunk_patches: 4
       max_batch_size: 1
       max_batch_wait_ms: 0
-    terminal: true
-    can_accept_stream_before_payload: true

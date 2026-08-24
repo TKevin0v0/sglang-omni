@@ -103,6 +103,66 @@ _VISIBILITY_RULES: tuple[tuple[str, PathVisibility, str], ...] = (
         "a stage name is its address; the config class declares it and every "
         "user-facing source addresses the stage by that name",
     ),
+    (
+        "stages.*.factory_path",
+        PathVisibility.INTERNAL,
+        "the stage factory is part of the stage topology and is declared by "
+        "the model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.next",
+        PathVisibility.INTERNAL,
+        "stage routing is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.terminal",
+        PathVisibility.INTERNAL,
+        "stage routing is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.route_fn",
+        PathVisibility.INTERNAL,
+        "stage routing is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.stream_to",
+        PathVisibility.INTERNAL,
+        "stream wiring is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.stream_done_to_fn",
+        PathVisibility.INTERNAL,
+        "stream wiring is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.wait_for",
+        PathVisibility.INTERNAL,
+        "fan-in wiring is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.wait_for_fn",
+        PathVisibility.INTERNAL,
+        "fan-in wiring is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.merge_fn",
+        PathVisibility.INTERNAL,
+        "fan-in wiring is part of the stage topology and is declared by the "
+        "model's config class, not set from a user-facing source",
+    ),
+    (
+        "stages.*.project_payload",
+        PathVisibility.INTERNAL,
+        "payload projection is part of the stage topology and is declared by "
+        "the model's config class, not set from a user-facing source",
+    ),
 )
 
 
