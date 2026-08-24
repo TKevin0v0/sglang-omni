@@ -99,7 +99,6 @@ def test_qwen3_omni_h20_colocated_example_config_loads_and_plans() -> None:
         "preprocessing",
         "image_encoder",
         "audio_encoder",
-        "mm_aggregate",
         "thinker",
         "decode",
         "talker_ar",
