@@ -5,16 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from sglang_omni.config import (
-    build_process_topology_plan,
-    build_stage_placement_plan,
-    resolve_stage_factory_args,
-)
+from sglang_omni.config import build_stage_placement_plan, resolve_stage_factory_args
 from sglang_omni.config.manager import ConfigManager
 from sglang_omni.models.qwen3_omni.config import (
     Qwen3OmniPipelineConfig,
     Qwen3OmniSpeechColocatedPipelineConfig,
 )
+from tests.unit_test.pipeline.helpers import build_compiled_process_topology
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -90,7 +87,7 @@ def test_qwen3_omni_h20_colocated_example_config_loads_and_plans() -> None:
     manager = ConfigManager.from_file(str(config_path))
     config = manager.config
     plan = build_stage_placement_plan(config)
-    topology = build_process_topology_plan(config, plan)
+    topology = build_compiled_process_topology(config)
 
     assert isinstance(config, Qwen3OmniSpeechColocatedPipelineConfig)
     assert config.name == "qwen3-omni-colocated-h20"

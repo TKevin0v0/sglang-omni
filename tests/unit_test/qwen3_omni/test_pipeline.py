@@ -19,7 +19,6 @@ from sglang_omni.cli.serve import (
 from sglang_omni.config import (
     PipelineConfig,
     StageConfig,
-    build_process_topology_plan,
     build_stage_placement_plan,
     resolve_stage_factory_args,
 )
@@ -61,6 +60,7 @@ from tests.unit_test.fixtures.qwen_fakes import (
     make_qwen_payload,
     make_qwen_state,
 )
+from tests.unit_test.pipeline.helpers import build_compiled_process_topology
 
 
 def _stage(config: PipelineConfig, name: str):
@@ -1207,7 +1207,7 @@ def test_qwen_text_thinker_tp_builds_topology_without_memory_fractions() -> None
     )
 
     placement = build_stage_placement_plan(merged)
-    build_process_topology_plan(merged, placement)
+    build_compiled_process_topology(merged)
 
     thinker = _stage(merged, "thinker")
     assert thinker.tp_size == 2

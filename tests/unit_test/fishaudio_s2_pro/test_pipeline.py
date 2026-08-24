@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 import torch
 
-from sglang_omni.config import build_process_topology_plan, build_stage_placement_plan
 from sglang_omni.models.fishaudio_s2_pro.config import S2ProPipelineConfig
 from sglang_omni.models.fishaudio_s2_pro.fish_speech.tokenizer import (
     IM_END_TOKEN,
@@ -38,6 +37,7 @@ from tests.unit_test.fixtures.fish_fakes import (
     make_s2pro_payload,
     make_s2pro_state,
 )
+from tests.unit_test.pipeline.helpers import build_compiled_process_topology
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +68,7 @@ def test_fish_config_state_and_tokenizer_prompt_contracts() -> None:
     assert [
         stage.gpu_memory_fraction for stage in config.stages if stage.gpu is not None
     ] == [None, None]
-    build_process_topology_plan(config, build_stage_placement_plan(config))
+    build_compiled_process_topology(config)
     assert config.terminal_stages == ["vocoder"]
     assert config.gpu_placement == {"tts_engine": 0, "vocoder": 0}
     assert config.supports_uploaded_voice_references() is True
