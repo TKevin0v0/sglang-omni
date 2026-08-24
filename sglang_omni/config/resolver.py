@@ -63,6 +63,18 @@ class ConfigResolver:
         for patch in ordered:
             _apply(data, patch)
 
+        # The baseline dump carries the name model_post_init derived from the
+        # baseline's model_path. When a patch replaces model_path and nothing
+        # sets name explicitly, clear the stale derivation so rebuilding
+        # rederives it from the new model_path.
+        touched = {patch.key for patch in ordered}
+        if (
+            "model_path" in touched
+            and "name" not in touched
+            and data.get("name") == self._base.model_path
+        ):
+            data["name"] = None
+
         config = self.config_cls(**data)
 
         # What the built config actually holds at each touched path. Not the

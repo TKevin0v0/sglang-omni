@@ -186,19 +186,13 @@ def _gate_custom_all_reduce_on_topology(
     return refined
 
 
-def apply_tensor_parallel_engine_overrides(
+def tensor_parallel_engine_writes(
     pipeline_config: PipelineConfig,
-) -> PipelineConfig:
-    """Write engine overrides the resolved TP settings imply.
+) -> dict[str, object]:
+    """The engine keys TP derivation would fill, as dotted-path writes.
 
-    Derived from the *resolved* configuration (TP size, GPU topology), so it
-    cannot be a patch: the value does not exist until every source has been
-    merged. Written through ``ConfigPath`` into a dump and re-validated, so
-    the derivation goes through the same door as every other write.
-
-    A derivation only fills gaps: a key the merged configuration already sets
-    in the stage's engine block -- from the model default, the file, or a
-    dotted flag -- is left exactly as it was set.
+    Only gaps are listed: a key the merged configuration already sets in the
+    stage's engine block is not the derivation's to touch.
     """
     config_cls = type(pipeline_config)
     topology_gated_custom_ar_stages = (
@@ -230,7 +224,25 @@ def apply_tensor_parallel_engine_overrides(
             if key in already_set:
                 continue
             writes[f"stages.{stage.name}.engine.{key}"] = value
+    return writes
 
+
+def apply_tensor_parallel_engine_overrides(
+    pipeline_config: PipelineConfig,
+) -> PipelineConfig:
+    """Write engine overrides the resolved TP settings imply.
+
+    Derived from the *resolved* configuration (TP size, GPU topology), so it
+    cannot be a patch: the value does not exist until every source has been
+    merged. Written through ``ConfigPath`` into a dump and re-validated, so
+    the derivation goes through the same door as every other write.
+
+    A derivation only fills gaps: a key the merged configuration already sets
+    in the stage's engine block -- from the model default, the file, or a
+    dotted flag -- is left exactly as it was set.
+    """
+    config_cls = type(pipeline_config)
+    writes = tensor_parallel_engine_writes(pipeline_config)
     if not writes:
         return pipeline_config
     data = pipeline_config.model_dump()

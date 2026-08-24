@@ -10,7 +10,12 @@ import yaml
 
 from sglang_omni.config.compat import canonicalize_dotted_key
 from sglang_omni.config.manager import ConfigManager, resolve_config_cls_for_model_path
-from sglang_omni.config.patch import ConfigPatchSet
+from sglang_omni.config.patch import (
+    ConfigPatch,
+    ConfigPatchSet,
+    ConfigSource,
+    SourceKind,
+)
 from sglang_omni.config.path import ConfigPath, ConfigPathError
 from sglang_omni.config.resolver import ConfigResolver, ResolvedConfig, diff_configs
 from sglang_omni.config.schema import PipelineConfig
@@ -129,6 +134,7 @@ def _resolve_sources(
     from sglang_omni.cli.serve import (
         apply_tensor_parallel_engine_overrides,
         patches_from_broadcast_flags,
+        tensor_parallel_engine_writes,
     )
 
     if config_file is None and model_path is None:
@@ -161,6 +167,7 @@ def _resolve_sources(
         resolved = ConfigResolver(baseline).resolve(patches)
         # The same post-merge derivation `serve` runs; it only fills engine
         # keys no source set, so the previewed config is the launched one.
+        derivation_writes = tensor_parallel_engine_writes(resolved.config)
         derived = apply_tensor_parallel_engine_overrides(resolved.config)
         # The derivation may fill a key a source explicitly cleared (an
         # engine key set to none is unset again, and unset keys are the
@@ -169,6 +176,22 @@ def _resolve_sources(
         # its line and the rewrite noted.
         for patch in resolved.patches.ordered():
             resolved.provenance.record_resolved(patch.key, patch.path.read(derived))
+        # A purely derived key has no patch; give it an entry of its own so
+        # explain names the derivation instead of claiming a model default.
+        derivation_source = ConfigSource(
+            SourceKind.MODEL_DEFAULT,
+            detail="derived from the resolved TP settings at launch",
+        )
+        for path_text, value in derivation_writes.items():
+            if resolved.provenance.touched(path_text):
+                continue
+            derivation_patch = ConfigPatch.create(
+                path_text, value, derivation_source, root=type(baseline)
+            )
+            resolved.provenance.record(derivation_patch, winning=True)
+            resolved.provenance.record_resolved(
+                path_text, derivation_patch.path.read(derived)
+            )
         return Resolution(baseline, replace(resolved, config=derived))
     except (ConfigPathError, ValueError) as exc:
         # An unknown path, a path the schema will not let a user write, two
@@ -309,6 +332,13 @@ def explain(
     if provenance.touched(compiled.raw):
         print(provenance.explain(compiled.raw))
         return
-    value = compiled.read(resolution.resolved.config)
+    try:
+        value = compiled.read(resolution.resolved.config)
+    except ConfigPathError:
+        # The path parses (a free mapping key or extra factory key can) but
+        # nothing wrote it, so there is no value to show.
+        print(f"{compiled.raw} is not set")
+        print("  no source touched this path and the model declares no default")
+        return
     print(f"{compiled.raw} = {value!r}")
     print("  no source touched this path; the value is the model's own default")
