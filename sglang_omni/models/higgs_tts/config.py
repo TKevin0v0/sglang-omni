@@ -91,7 +91,23 @@ class HiggsTtsPipelineConfig(PipelineConfig):
         ),
     ]
 
+    # Stream cadence is owned by the vocoder stage; the tts_engine emits on
+    # the same cadence, so a tts_engine value either mirrors the vocoder's or
+    # is refused.
+    _STREAM_CADENCE_KEYS: ClassVar[tuple[str, ...]] = (
+        "stream_stride",
+        "stream_followup_stride",
+        "initial_chunk_frames",
+    )
+
     def stage_factory_kwargs(self, stage_name: str) -> dict[str, Any]:
+        if stage_name == "tts_engine":
+            vocoder_extra = self.stage_named("vocoder").factory.model_extra or {}
+            return {
+                key: vocoder_extra[key]
+                for key in self._STREAM_CADENCE_KEYS
+                if key in vocoder_extra
+            }
         if stage_name == "vocoder":
             return {
                 "compile_decode": False,
@@ -117,6 +133,21 @@ class HiggsTtsPipelineConfig(PipelineConfig):
                     )
                 ),
             )
+        vocoder_extra = stages["vocoder"].factory.model_extra or {}
+        tts_engine_extra = stages["tts_engine"].factory.model_extra or {}
+        for key in self._STREAM_CADENCE_KEYS:
+            if key not in vocoder_extra:
+                if key in tts_engine_extra:
+                    raise ValueError(
+                        f"Higgs TTS {key!r} must be configured on the vocoder stage"
+                    )
+                continue
+            if key in tts_engine_extra and tts_engine_extra[key] != vocoder_extra[key]:
+                raise ValueError(
+                    f"Higgs TTS {key!r} must match between the tts_engine and "
+                    "vocoder stages; omit the tts_engine value to derive it "
+                    "from the vocoder"
+                )
 
     def requires_uploaded_voice_for_named_voice(self) -> bool:
         return True
