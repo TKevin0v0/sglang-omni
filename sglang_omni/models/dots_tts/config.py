@@ -82,6 +82,22 @@ class DotsTTSPipelineConfig(PipelineConfig):
         super().model_post_init(__context)
         if any(stage.tp_size != 1 for stage in self.stages):
             raise ValueError("dots.tts currently supports tp_size=1 only")
+        # note (guozhihao-224): preprocessing bakes the generation schedule the
+        # latent engine executes, so num_steps and max_generate_length must
+        # agree between the two stages. The latent_engine group is the owner;
+        # a preprocessing value is refused rather than silently diverging (the
+        # batched flow rejects requests whose step count differs from the
+        # engine NFE). Unset preprocessing keys are derived at launch.
+        preprocessing_extra = (
+            self.stage_named("preprocessing").factory.model_extra or {}
+        )
+        for derived_key in ("num_steps", "max_generate_length"):
+            if derived_key in preprocessing_extra:
+                raise ValueError(
+                    f"dots.tts preprocessing {derived_key!r} is derived from "
+                    f"the latent_engine stage; configure "
+                    f"latent_engine.factory.{derived_key} instead"
+                )
         # note (guozhihao-224): stream_slots must match backbone concurrency
         # so a max_running_requests override cannot outrun vocoder admission
         # after readiness. A pinned value that disagrees is refused here, on
@@ -102,6 +118,14 @@ class DotsTTSPipelineConfig(PipelineConfig):
                 )
 
     def stage_factory_kwargs(self, stage_name: str) -> dict[str, Any]:
+        if stage_name == "preprocessing":
+            latent_extra = self.stage_named("latent_engine").factory.model_extra or {}
+            return {
+                "num_steps": int(latent_extra.get("num_steps", 4)),
+                "max_generate_length": int(
+                    latent_extra.get("max_generate_length", 500)
+                ),
+            }
         if stage_name == "vocoder":
             return {
                 "stream_slots": self._latent_max_running_requests(
