@@ -37,6 +37,7 @@ from sglang.srt.managers.schedule_batch import (
 from sglang.srt.managers.scheduler import Scheduler as _Upstream
 from sglang.srt.managers.scheduler import validate_input_length
 from sglang.srt.mem_cache.common import release_kv_cache
+from sglang.srt.runtime_context import get_context
 from sglang.srt.utils import broadcast_pyobj
 
 from sglang_omni.admission import QueueFullError
@@ -258,6 +259,10 @@ class OmniScheduler:
         ] = {}
         self._backlogged_request_build_payloads: deque[Any] = deque()
         self._request_build_max_pending_observed = 0
+        # Upstream step-counter accounting expects this decode timestamp to
+        # exist even though OmniScheduler composes rather than subclasses the
+        # upstream scheduler initializer.
+        self._prev_decode_launch_ts: float | None = None
 
         # --- Core scheduling state (read/written by upstream methods) -----
         self.server_args = server_args
@@ -342,14 +347,26 @@ class OmniScheduler:
 
         gsa = get_global_server_args()
         if gsa is not None and gsa.pp_max_micro_batch_size is None:
+            default_micro_batch_size = max(
+                self.max_running_requests // self.pp_size,
+                1,
+            )
             override_server_args(
                 gsa,
                 "sglang_omni.scheduler.pp_max_micro_batch_size_default",
-                pp_max_micro_batch_size=max(
-                    self.max_running_requests // self.pp_size,
-                    1,
-                ),
+                pp_max_micro_batch_size=default_micro_batch_size,
             )
+            # Newer SGLang schedulers read the published ParallelContext config
+            # bag rather than the legacy global ServerArgs object.  Keep both
+            # stores aligned when the runtime context has already been
+            # published; older releases simply do not expose this API.
+            try:
+                get_context().override(
+                    "sglang_omni.scheduler.pp_max_micro_batch_size_default",
+                    pp_max_micro_batch_size=default_micro_batch_size,
+                )
+            except (AttributeError, ValueError):
+                pass
 
         # Workers
         self.tp_worker = tp_worker
